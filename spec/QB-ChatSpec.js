@@ -561,7 +561,7 @@ describe('Chat API', function() {
       }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT);
 
       it('can create a message and then receive it (private dialog) (send_to_chat=1) (chat_dialog_id)', function(done) {
-        pending('Does not get by XMPP');
+        // pending('Does not get by XMPP');
         var msgExtension = {
           param1: "value1",
           param2: "value2"
@@ -581,7 +581,7 @@ describe('Chat API', function() {
       }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT);
 
       it('can create a message and then receive it (private dialog) (send_to_chat=1) (recipient_id)', function(done) {
-        pending('Does not get by XMPP');
+        // pending('Does not get by XMPP');
 
         var msgExtension = {
           param1: "value1",
@@ -649,8 +649,8 @@ describe('Chat API', function() {
       }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT);
 
       it('can create a message and then receive it (group dialog) (send_to_chat=1)', function(done) {
-        pending('Does not get by XMPP');
-        
+        // pending('Does not get by XMPP');
+
         var msgExtension = {
           param1: "value1",
           param2: "value2"
@@ -803,7 +803,7 @@ describe('Chat API', function() {
             console.log('TEST', res);
             expect(err).toBeNull();
             expect(res[dialogId1Group]).toEqual(0);
-            
+
 
             var totalUnread = 0;
             expect(res.total).toBeGreaterThan(totalUnread);
@@ -939,11 +939,14 @@ describe('Chat API', function() {
 
     describe('Messaging: ', function() {
 
+      var dialogIdPrivate;
+
       it('can send and receive private message', function(done) {
         var body = 'Warning! People are coming',
         msgExtension = {
           name: 'skynet',
-          mission: 'take over the planet'
+          mission: 'take over the planet',
+          save_to_history: '1'
         },
         msg = {
           type: 'chat',
@@ -959,14 +962,37 @@ describe('Chat API', function() {
           expect(receivedMessage.id).toEqual(msg.id);
           expect(receivedMessage.type).toEqual(msg.type);
           expect(receivedMessage.body).toEqual(body);
-          expect(receivedMessage.extension).toEqual(msgExtension);
+          expect(receivedMessage.extension).toEqual(jasmine.objectContaining(msgExtension));
           expect(receivedMessage.markable).toEqual(1);
+          expect(receivedMessage.dialog_id).not.toBeNull();
+
+          dialogIdPrivate = receivedMessage.dialog_id;
 
           done();
         }
 
         QB_RECEIVER.chat.onMessageListener = onMsgCallback;
         msg.id = QB_SENDER.chat.send(QBUser2.id, msg);
+
+      }, MESSAGING_TIMEOUT);
+
+      it("can't send group message to private dialog", function(done) {
+
+        var msg = {
+            type: 'groupchat',
+            body: 'Warning! People are coming! XMPP message ' + Math.floor((Math.random() * 100) + 1)
+        };
+
+        QB_SENDER.chat.onMessageErrorListener = function (messageId, error) {
+          expect(error.code).toEqual(405);
+          expect(error.detail).toEqual("Private(1-1) chat dialogs are not supported by MUC service.");
+
+          QB_SENDER.chat.onMessageErrorListener = null;
+
+          done();
+        };
+        var roomJid = QB_SENDER.chat.helpers.getRoomJidFromDialogId(dialogIdPrivate);
+        msg.id = QB_SENDER.chat.send(roomJid, msg);
 
       }, MESSAGING_TIMEOUT);
 
@@ -994,6 +1020,14 @@ describe('Chat API', function() {
         msg.id = QB_SENDER.chat.sendSystemMessage(QBUser2.id, msg);
 
       }, MESSAGING_TIMEOUT);
+
+      afterAll(function(done){
+        QB_SENDER.chat.dialog.delete([dialogId5Private], {force: 1}, function(err, res) {
+          dialogId5Private = null;
+          done();
+        });
+      });
+
     });
 
     // ===============================STATUSES==================================
@@ -1172,8 +1206,10 @@ describe('Chat API', function() {
 
     // =============================GROUP MESSAGING=============================
 
-    describe('Group Messaging: ', function() {
+    fdescribe('Group Messaging: ', function() {
       var dialogJoinable;
+      var dialogNotJoinable;
+      var dialogPublic;
 
       beforeAll(function(done){
 
@@ -1202,7 +1238,23 @@ describe('Chat API', function() {
 
             dialogJoinable = res;
 
-            done();
+            dialogCreateParams = {
+              type: 1,
+              name: 'Jasmine Test Dialog Public'
+            };
+
+            QB_SENDER.chat.dialog.create(dialogCreateParams, function (err, res) {
+              expect(err).toBeNull();
+              expect(res).toBeDefined();
+              expect(res.type).toEqual(dialogCreateParams.type);
+              expect(res.name).toEqual(dialogCreateParams.name);
+              expect(res.occupants_ids).toEqual([]);
+
+              dialogPublic = res;
+
+              done();
+            });
+
           });
         });
 
@@ -1366,7 +1418,6 @@ describe('Chat API', function() {
               QB_RECEIVER.chat.onJoinOccupant = null;
               QB_SENDER.chat.onJoinOccupant = null;
 
-              console.info(statusesReceivedCount);
               expect(statusesReceivedCount).toEqual(0);
               done();
 
@@ -1376,11 +1427,47 @@ describe('Chat API', function() {
 
         });
 
+      }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT+3000);
+
+      it("do not receive room statuses for public dialog", function(done) {
+        if(isOldVersion){
+          done();
+          return;
+        }
+
+        var statusesReceivedCount = 0;
+
+        QB_SENDER.chat.onJoinOccupant = function(dialogId, userId){
+          ++statusesReceivedCount;
+        };
+
+        QB_SENDER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanza) {
+          expect(stanza).not.toBeNull();
+
+          QB_RECEIVER.chat.onJoinOccupant = function(dialogId, userId){
+            ++statusesReceivedCount;
+          };
+
+          QB_RECEIVER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanza) {
+            expect(stanza).not.toBeNull();
+          });
+        });
+
+        console.info("Waiting for ROOM statuses timeout");
+        setTimeout(function(){
+          console.info("ROOM statuses timeout");
+          QB_RECEIVER.chat.onJoinOccupant = null;
+          QB_SENDER.chat.onJoinOccupant = null;
+
+          expect(statusesReceivedCount).toEqual(0);
+          done();
+
+        }, 5000);
 
       }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT+3000);
 
       afterAll(function(done) {
-        QB_SENDER.chat.dialog.delete([dialogJoinable._id], {force: 1}, function(err, res) {
+        QB_SENDER.chat.dialog.delete([dialogJoinable._id, dialogPublic._id], {force: 1}, function(err, res) {
           expect(err).toBeNull();
 
           QB_SENDER.destroySession(function (err, result){
