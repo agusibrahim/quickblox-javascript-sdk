@@ -97,8 +97,7 @@ describe('Chat API', function() {
 
       it("can't create a dialog (private) (is_joinable=1)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var params = {
@@ -153,8 +152,7 @@ describe('Chat API', function() {
 
       it('can create a dialog (group)(not joinable) and then send/receive a message', function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var params = {
@@ -220,8 +218,7 @@ describe('Chat API', function() {
 
       it("can't create a dialog (public group) with is_joinable=0", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var params = {
@@ -268,8 +265,7 @@ describe('Chat API', function() {
 
       it("can't update a dialog (private) (set is_joinable=1)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var toUpdate = {
@@ -292,8 +288,7 @@ describe('Chat API', function() {
 
       it('can update a dialog (group) (also set is_joinable=0) and then send/receive a message', function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var toUpdate = {
@@ -320,8 +315,7 @@ describe('Chat API', function() {
 
       it('can update a dialog (group) (also set is_joinable=1)', function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var toUpdate = {
@@ -348,8 +342,7 @@ describe('Chat API', function() {
 
       it("can't update a dialog (group) (set is_joinable=0) (if you are not an owner)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         // login with other user
@@ -511,8 +504,7 @@ describe('Chat API', function() {
 
       it("can't update a dialog (public group) (set is_joinable=0)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var toUpdate = {
@@ -688,8 +680,7 @@ describe('Chat API', function() {
 
       it("can create a system message and then receive it (private dialog)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var msgExtension = {
@@ -744,8 +735,7 @@ describe('Chat API', function() {
 
       it("can't create a system message (group dialog)", function(done) {
         if(isOldVersion){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var params = {
@@ -869,8 +859,7 @@ describe('Chat API', function() {
 
       it('can delete dialogs', function(done) {
         if(!dialogId2GroupNotJoinable && !dialogId3PublicGroup && !dialogId4Private){
-          done();
-          return;
+          pending("not supported in this version");
         }
 
         var dialogs = [];
