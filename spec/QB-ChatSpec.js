@@ -1209,7 +1209,6 @@ describe('Chat API', function() {
     fdescribe('Group Messaging: ', function() {
       var dialogJoinable;
       var dialogNotJoinable;
-      var dialogPublic;
 
       beforeAll(function(done){
 
@@ -1238,22 +1237,7 @@ describe('Chat API', function() {
 
             dialogJoinable = res;
 
-            dialogCreateParams = {
-              type: 1,
-              name: 'Jasmine Test Dialog Public'
-            };
-
-            QB_SENDER.chat.dialog.create(dialogCreateParams, function (err, res) {
-              expect(err).toBeNull();
-              expect(res).toBeDefined();
-              expect(res.type).toEqual(dialogCreateParams.type);
-              expect(res.name).toEqual(dialogCreateParams.name);
-              expect(res.occupants_ids).toEqual([]);
-
-              dialogPublic = res;
-
-              done();
-            });
+            done();
 
           });
         });
@@ -1429,45 +1413,152 @@ describe('Chat API', function() {
 
       }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT+3000);
 
-      it("do not receive room statuses for public dialog", function(done) {
-        if(isOldVersion){
-          done();
-          return;
-        }
+      fdescribe('Public group dialog: ', function() {
 
-        var statusesReceivedCount = 0;
+        var dialogPublic;
 
-        QB_SENDER.chat.onJoinOccupant = function(dialogId, userId){
-          ++statusesReceivedCount;
-        };
+        beforeAll(function(done){
+          var dialogCreateParams = {
+            type: 1,
+            name: 'Jasmine Test Dialog Public'
+          };
 
-        QB_SENDER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanza) {
-          expect(stanza).not.toBeNull();
+          QB_SENDER.chat.dialog.create(dialogCreateParams, function (err, res) {
+            expect(err).toBeNull();
+            expect(res).toBeDefined();
+            expect(res.type).toEqual(dialogCreateParams.type);
+            expect(res.name).toEqual(dialogCreateParams.name);
+            expect(res.occupants_ids).toEqual([]);
+
+            dialogPublic = res;
+
+            done();
+          });
+
+        });
+
+        it("do not receive presence statuses when join", function(done) {
+          if(isOldVersion){
+            pending('not supported in this version');
+          }
+
+          var statusesReceivedCount = 0;
+
+          QB_SENDER.chat.onJoinOccupant = function(dialogId, userId){
+            ++statusesReceivedCount;
+          };
 
           QB_RECEIVER.chat.onJoinOccupant = function(dialogId, userId){
             ++statusesReceivedCount;
           };
 
-          QB_RECEIVER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanza) {
-            expect(stanza).not.toBeNull();
+          QB_SENDER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanzaResponse) {
+            expect(stanzaResponse).not.toBeNull();
+            console.log("JOINED");
+
+            QB_RECEIVER.chat.muc.join(dialogPublic.xmpp_room_jid, function(stanzaResponse) {
+              expect(stanzaResponse).not.toBeNull();
+              console.log("JOINED");
+            });
+
           });
-        });
 
-        console.info("Waiting for ROOM statuses timeout");
-        setTimeout(function(){
-          console.info("ROOM statuses timeout");
-          QB_RECEIVER.chat.onJoinOccupant = null;
-          QB_SENDER.chat.onJoinOccupant = null;
+          setTimeout(function(){
+            QB_RECEIVER.chat.onJoinOccupant = null;
+            QB_SENDER.chat.onJoinOccupant = null;
 
-          expect(statusesReceivedCount).toEqual(0);
-          done();
+            expect(statusesReceivedCount).toEqual(0);
+
+            done();
+
+          }, 4000);
 
         }, 5000);
 
-      }, REST_REQUESTS_TIMEOUT+MESSAGING_TIMEOUT+3000);
+        it('can get online users', function(done) {
+          QB_SENDER.chat.muc.listOnlineUsers(dialogPublic.xmpp_room_jid, function(users) {
+            expect(users.length).toEqual(2);
+            expect(users).toEqual(jasmine.arrayContaining([QBUser1.id, QBUser2.id]));
+
+            done();
+          });
+        }, MESSAGING_TIMEOUT);
+
+        it("can send and receive messages", function(done) {
+
+          var messagesReceivedCount = 0;
+
+          var msg = {
+            type: 'groupchat',
+            body: 'Warning! Robots are coming again and again',
+            extension: {save_to_history: '1'}
+          };
+
+          msg.id = QB_SENDER.chat.send(dialogPublic.xmpp_room_jid, msg);
+
+          function onMsgCallback(userId, receivedMessage) {
+            expect(userId).toEqual(QBUser1.id);
+
+            expect(receivedMessage).toBeDefined();
+            expect(receivedMessage.id).toEqual(msg.id);
+            expect(receivedMessage.type).toEqual(msg.type);
+            expect(receivedMessage.body).toEqual(msg.body);
+            expect(receivedMessage.extension).toEqual(jasmine.objectContaining(msg.extension));
+            expect(receivedMessage.dialog_id).not.toBeNull();
+
+            ++messagesReceivedCount;
+            if(messagesReceivedCount == 2){
+              done();
+            }
+          }
+
+          QB_SENDER.chat.onMessageListener = onMsgCallback;
+          QB_RECEIVER.chat.onMessageListener = onMsgCallback;
+
+        });
+
+        it("do not receive presence statuses when leave", function(done) {
+          var statusesReceivedCount = 0;
+
+          QB_SENDER.chat.onLeaveOccupant = function(dialogId, userId){
+            ++statusesReceivedCount;
+          };
+
+          QB_RECEIVER.chat.onLeaveOccupant = function(dialogId, userId){
+            ++statusesReceivedCount;
+          };
+
+          QB_SENDER.chat.muc.leave(dialogJoinable.xmpp_room_jid, function() {
+
+          });
+
+          QB_RECEIVER.chat.muc.leave(dialogJoinable.xmpp_room_jid, function() {
+
+          });
+
+          setTimeout(function(){
+            QB_RECEIVER.chat.onLeaveOccupant = null;
+            QB_SENDER.chat.onLeaveOccupant = null;
+
+            expect(statusesReceivedCount).toEqual(0);
+
+            done();
+
+          }, 4000);
+
+        }, 5000);
+
+        afterAll(function(done){
+          QB_SENDER.chat.dialog.delete([dialogPublic._id], {force: 1}, function(err, res) {
+            expect(err).toBeNull();
+            done();
+          });
+        });
+
+      });
 
       afterAll(function(done) {
-        QB_SENDER.chat.dialog.delete([dialogJoinable._id, dialogPublic._id], {force: 1}, function(err, res) {
+        QB_SENDER.chat.dialog.delete([dialogJoinable._id], {force: 1}, function(err, res) {
           expect(err).toBeNull();
 
           QB_SENDER.destroySession(function (err, result){
