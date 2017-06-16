@@ -941,11 +941,11 @@ describe('Chat API', function() {
 
       var dialogIdPrivate;
 
-      it('can send and receive private message', function(done) {
-        var body = 'Warning! People are coming',
+      it('can send and receive private message (forth)', function(done) {
+        var body = 'Warning! People are coming1',
         msgExtension = {
-          name: 'skynet',
-          mission: 'take over the planet',
+          name: 'skynet1',
+          mission: 'take over the planet1',
           save_to_history: '1'
         },
         msg = {
@@ -973,6 +973,39 @@ describe('Chat API', function() {
 
         QB_RECEIVER.chat.onMessageListener = onMsgCallback;
         msg.id = QB_SENDER.chat.send(QBUser2.id, msg);
+
+      }, MESSAGING_TIMEOUT);
+
+      it('can send and receive private message (back)', function(done) {
+        var body = 'Warning! People are coming2',
+        msgExtension = {
+          name: 'skynet2',
+          mission: 'take over the planet2',
+          save_to_history: '1'
+        },
+        msg = {
+          type: 'chat',
+          body: body,
+          extension: msgExtension,
+          markable: 1
+        };
+
+        function onMsgCallback(userId, receivedMessage) {
+          expect(userId).toEqual(QBUser2.id);
+
+          expect(receivedMessage).toBeDefined();
+          expect(receivedMessage.id).toEqual(msg.id);
+          expect(receivedMessage.type).toEqual(msg.type);
+          expect(receivedMessage.body).toEqual(body);
+          expect(receivedMessage.extension).toEqual(jasmine.objectContaining(msgExtension));
+          expect(receivedMessage.markable).toEqual(1);
+          expect(receivedMessage.dialog_id).not.toBeNull();
+
+          done();
+        }
+
+        QB_SENDER.chat.onMessageListener = onMsgCallback;
+        msg.id = QB_RECEIVER.chat.send(QBUser1.id, msg);
 
       }, MESSAGING_TIMEOUT);
 
@@ -1020,6 +1053,28 @@ describe('Chat API', function() {
         msg.id = QB_SENDER.chat.sendSystemMessage(QBUser2.id, msg);
 
       }, MESSAGING_TIMEOUT);
+
+
+      afterAll(function(done) {
+        var createSessionParams = {
+          'login': QBUser1.login,
+          'password': QBUser1.password
+        };
+        QB_SENDER.createSession(createSessionParams, function (err, result) {
+          expect(err).toBeNull();
+
+          QB_SENDER.chat.dialog.delete([dialogIdPrivate], {force: 1}, function(err, res) {
+            expect(err).toBeNull();
+
+            QB_SENDER.destroySession(function (err, result){
+              expect(err).toBeNull();
+
+              done();
+            });
+
+          });
+        });
+      }, REST_REQUESTS_TIMEOUT*3);
 
     });
 
@@ -1720,7 +1775,7 @@ describe('Chat API', function() {
 
     // ============================Contact List=================================
 
-    describe('[Roster] Contact list: ', function() {
+    describe('Contact List (Roster): ', function() {
 
       it('can add a user to contact list and confirm the subscription request', function(done) {
         QB_RECEIVER.chat.onSubscribeListener = function(userId) {
@@ -1813,7 +1868,7 @@ describe('Chat API', function() {
 
     // ==========================Privacy Lists==================================
 
-    describe('Privacy list: ', function() {
+    describe('Privacy List: ', function() {
       var PRIVACY_LIST_NAME = "blockedusers";
 
       it('can create new list with items', function(done) {
